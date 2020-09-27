@@ -1,7 +1,11 @@
 uniform float time;
+uniform vec3 colors[2];
 attribute float alpha;
+attribute float colorIdx;
+attribute float rot;
 varying float vAlpha;
-
+varying vec3 vColor;
+varying float vRot;
 
 vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
 vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
@@ -77,7 +81,9 @@ float cnoise(vec3 P){
 
 void main() {
   vAlpha = alpha;
+  vColor = colors[int(colorIdx)];
+  vRot = rot;
   vec4 mvPos = modelViewMatrix * vec4(position, 1.);
-  gl_PointSize = 10. *  (1. / - mvPos.z);
+  gl_PointSize = 20. *  (1. / - mvPos.z);
   gl_Position = projectionMatrix * mvPos;
 }

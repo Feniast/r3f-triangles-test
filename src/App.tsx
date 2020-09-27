@@ -6,7 +6,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
-} from "react";
+} from 'react';
 import {
   Canvas,
   useFrame,
@@ -14,24 +14,24 @@ import {
   extend,
   useThree,
   useUpdate,
-} from "react-three-fiber";
-import * as THREE from "three";
-import { OrbitControls, shaderMaterial, useTextureLoader, Html } from "drei";
-import * as dat from "dat.gui";
-import { useDeepMemo, useDeepCompareEffect } from "./useDeep";
-import myVideo from "url:./assets/video.mp4";
-import vertex from "./shader/vertex.glsl";
-import fragment from "./shader/fragment.glsl";
-import vertexParticles from "./shader/vertex-particles.glsl";
-import fragmentParticles from "./shader/fragment-particles.glsl";
-import { PlaneBufferGeometry } from "three";
-import tri from "url:./assets/tri.png";
-import mask1Image from "url:./assets/mask1.jpg";
-import useSWR from "swr";
+} from 'react-three-fiber';
+import * as THREE from 'three';
+import { OrbitControls, shaderMaterial, useTextureLoader, Html } from 'drei';
+import * as dat from 'dat.gui';
+import { useDeepMemo, useDeepCompareEffect } from './useDeep';
+import myVideo from 'url:./assets/video.mp4';
+import vertex from './shader/vertex.glsl';
+import fragment from './shader/fragment.glsl';
+import vertexParticles from './shader/vertex-particles.glsl';
+import fragmentParticles from './shader/fragment-particles.glsl';
+import { PlaneBufferGeometry } from 'three';
+import tri from 'url:./assets/tri.png';
+import mask1Image from 'url:./assets/mask1.jpg';
+import useSWR from 'swr';
 
 interface DatGuiSetting {
   value: string | number | undefined;
-  type?: "color" | undefined;
+  type?: 'color' | undefined;
   min?: number;
   max?: number;
   step?: number;
@@ -41,6 +41,7 @@ const ParticlesShaderMaterial = shaderMaterial(
   {
     time: 0,
     tex: null,
+    colors: null,
   },
   vertexParticles,
   fragmentParticles,
@@ -52,8 +53,8 @@ extend({
 });
 
 const useDatGui = <T extends Record<string, DatGuiSetting>>(settings: T) => {
-  const obj = useDeepMemo<Record<keyof T, DatGuiSetting["value"]>>(() => {
-    const o = {} as Record<keyof T, DatGuiSetting["value"]>;
+  const obj = useDeepMemo<Record<keyof T, DatGuiSetting['value']>>(() => {
+    const o = {} as Record<keyof T, DatGuiSetting['value']>;
     Object.keys(settings).forEach((key) => {
       const setting = settings[key];
       const { value } = setting;
@@ -67,7 +68,7 @@ const useDatGui = <T extends Record<string, DatGuiSetting>>(settings: T) => {
     Object.keys(settings).forEach((key) => {
       const setting = settings[key];
       const { type, min, max, step } = setting;
-      if (type === "color") {
+      if (type === 'color') {
         inst.addColor(obj, key);
       } else {
         inst.add(obj, key, min, max, step);
@@ -89,10 +90,10 @@ interface UseImageDataOptions {
 const loadImage = (src: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const i = new Image();
-    i.addEventListener("load", () => {
+    i.addEventListener('load', () => {
       resolve(i);
     });
-    i.addEventListener("error", (e) => {
+    i.addEventListener('error', (e) => {
       reject(e);
     });
     i.src = src;
@@ -100,13 +101,13 @@ const loadImage = (src: string): Promise<HTMLImageElement> => {
 };
 
 const useImageData = (options: UseImageDataOptions) => {
-  const canvas = useMemo(() => document.createElement("canvas"), []);
-  const ctx = useMemo(() => canvas.getContext("2d"), [canvas]);
+  const canvas = useMemo(() => document.createElement('canvas'), []);
+  const ctx = useMemo(() => canvas.getContext('2d'), [canvas]);
   const { image, scale = 1 } = options;
   const { data: img } = useSWR<HTMLImageElement>(
-    ["image", image],
+    ['image', image],
     (__, i) => {
-      if (typeof i === "string") {
+      if (typeof i === 'string') {
         return loadImage(i);
       }
       return i;
@@ -135,44 +136,107 @@ const useImageData = (options: UseImageDataOptions) => {
 
 const size = 100;
 
+const Colors = [
+  new THREE.Color(0xffffff),
+  new THREE.Color(247 / 255, 203 / 255, 105 / 255),
+];
+
+const random = (min: number, max: number, isInt = false) => {
+  const r = Math.random() * (max - min) + min;
+  return isInt ? Math.floor(r) : r;
+};
+
+const getPixelColor = (imageData: ImageData, x: number, y: number) => {
+  const { width, data } = imageData;
+  const i = (x + y * width) * 4;
+  return [data[i], data[i + 1], data[i + 2], data[i + 3]];
+};
+
 const Points = () => {
   const { clock } = useThree();
   const { data: maskData } = useImageData({
     image: mask1Image,
-    scale: 150 / 1920,
+    scale: 100 / 1920,
   });
   const triTexture = useTextureLoader(tri);
+  const speeds = useRef<number[] | undefined>();
+  const posScale = 1 / 50;
+  const speedScale = 0.001;
   const geometry = useMemo(() => {
     const bufferGeo = new THREE.BufferGeometry();
     const vertices: number[] = [];
     const alphas: number[] = [];
+    const colors: number[] = [];
+    const rot: number[] = [];
+    speeds.current = [];
     const { width, height, data } = maskData;
     for (let i = 0; i < width; i++) {
       for (let j = 0; j < height; j++) {
         const p = data[(j * width + i) * 4];
-        if (p > 0) {
-          const x = (i - width * 0.5) / 150;
-          const y = -(j - height * 0.5) / 150;
-          vertices.push(x, y, 0);
-          alphas.push(Math.random() * 0.6 + 0.4);
+        if (p === 255) {
+          const x = (i - width * 0.5) * posScale;
+          const y = -(j - height * 0.5) * posScale;
+          const z = Math.random() * 0.5 + 0.5;
+          vertices.push(x, y, z);
+          alphas.push(Math.random() * 0.8 + 0.1);
+          colors.push(random(0, Colors.length, true));
+          rot.push(Math.random() * Math.PI * 2);
+          speeds.current.push(Math.random() * speedScale * 0.5 + speedScale);
         }
       }
     }
     bufferGeo.setAttribute(
-      "position",
+      'position',
       new THREE.Float32BufferAttribute(vertices, 3)
     );
     bufferGeo.setAttribute(
-      "alpha",
+      'alpha',
       new THREE.Float32BufferAttribute(alphas, 1)
     );
+    bufferGeo.setAttribute(
+      'colorIdx',
+      new THREE.Int8BufferAttribute(colors, 1)
+    );
+    bufferGeo.setAttribute('rot', new THREE.Float32BufferAttribute(rot, 1));
     return bufferGeo;
   }, []);
 
   const material = useRef<THREE.ShaderMaterial>();
 
+  const update = () => {
+    const position = geometry.attributes.position;
+    const rot = geometry.attributes.rot;
+    const posArr = (position as THREE.BufferAttribute).array;
+    const rotArr = rot.array;
+    const { width, height } = maskData;
+    for (let i = 0; i < posArr.length; i += 3) {
+      let x = posArr[i];
+      let y = posArr[i + 1];
+      let r = rotArr[i / 3];
+      const speed = speeds.current[i / 3];
+
+      let ix = x / posScale + 0.5 * width;
+      let iy = -y / posScale + 0.5 * height;
+      
+      if (ix <= 0 || ix >= width || iy <= 0 || iy >= height) {
+        r += Math.PI * (1 + Math.random() * 0.05);
+      } else if (getPixelColor(maskData, ~~ix, ~~iy)[0] === 0) {
+        r += Math.PI * (1 + Math.random() * 0.05);
+      }
+
+      x += speed * Math.cos(r);
+      y += speed * Math.sin(r);
+      (posArr as any)[i] = x;
+      (posArr as any)[i + 1] = y;
+      (rotArr as any)[i / 3] = r;
+    }
+    position.needsUpdate = true;
+    rot.needsUpdate = true;
+  };
+
   useFrame(() => {
     material.current.uniforms.time.value = clock.elapsedTime;
+    update();
   });
 
   return (
@@ -185,6 +249,7 @@ const Points = () => {
         transparent
         attach="material"
         tex={triTexture}
+        colors={Colors}
       />
     </points>
   );
@@ -224,7 +289,7 @@ const App = () => {
       }}
     >
       <ambientLight intensity={0.5} />
-      <CameraSet />
+      {/* <CameraSet /> */}
       <OrbitControls />
       <Suspense
         fallback={
