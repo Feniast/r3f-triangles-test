@@ -1,4 +1,6 @@
 uniform float time;
+attribute float alpha;
+varying float vAlpha;
 
 
 vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
@@ -74,6 +76,7 @@ float cnoise(vec3 P){
 }
 
 void main() {
+  vAlpha = alpha;
   vec4 mvPos = modelViewMatrix * vec4(position, 1.);
   gl_PointSize = 10. *  (1. / - mvPos.z);
   gl_Position = projectionMatrix * mvPos;
