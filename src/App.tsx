@@ -28,6 +28,8 @@ import { PlaneBufferGeometry } from "three";
 import tri from "url:./assets/tri.png";
 import mask1Image from "url:./assets/mask1.jpg";
 import mask2Image from "url:./assets/mask2.jpg";
+import image1 from "url:./assets/image1.jpg";
+import image2 from "url:./assets/image2.jpg";
 import useSWR from "swr";
 
 interface DatGuiSetting {
@@ -37,6 +39,15 @@ interface DatGuiSetting {
   max?: number;
   step?: number;
 }
+
+const ImgShaderMaterial = shaderMaterial(
+  {
+    image: null,
+  },
+  vertex,
+  fragment,
+  () => null
+);
 
 const ParticlesShaderMaterial = shaderMaterial(
   {
@@ -51,6 +62,7 @@ const ParticlesShaderMaterial = shaderMaterial(
 
 extend({
   ParticlesShaderMaterial,
+  ImgShaderMaterial,
 });
 
 const useDatGui = <T extends Record<string, DatGuiSetting>>(settings: T) => {
@@ -152,7 +164,6 @@ const getPixelColor = (imageData: ImageData, x: number, y: number) => {
 };
 
 interface PointsProps {
-  positionScale?: number;
   imageScale?: number;
   speedScale?: number;
   maskImage: string;
@@ -160,20 +171,16 @@ interface PointsProps {
 }
 
 const Points: React.FC<PointsProps> = (props) => {
-  let {
-    positionScale = 1 / 50,
-    imageScale = 100 / 1920,
-    speedScale = 0.001,
-    maskImage,
-    image,
-  } = props;
+  let { imageScale = 100 / 1920, speedScale = 0.0006, maskImage, image } = props;
   const { clock, size } = useThree();
-  const { data: maskData, image: imgEl } = useImageData({
+  const { data: maskData } = useImageData({
     image: maskImage,
     scale: imageScale,
   });
 
-  positionScale = 1 / maskData.height;
+  const imageTexture = useTextureLoader(image);
+
+  const positionScale = 1 / maskData.height;
 
   const imageAspect = maskData.width / maskData.height;
 
@@ -219,7 +226,8 @@ const Points: React.FC<PointsProps> = (props) => {
     return bufferGeo;
   }, []);
 
-  const material = useRef<THREE.ShaderMaterial>();
+  const particlesMaterial = useRef<THREE.ShaderMaterial>();
+  const imgMaterial = useRef<THREE.ShaderMaterial>();
 
   const update = () => {
     const position = geometry.attributes.position;
@@ -257,36 +265,34 @@ const Points: React.FC<PointsProps> = (props) => {
   };
 
   useFrame(() => {
-    material.current.uniforms.time.value = clock.elapsedTime;
+    particlesMaterial.current.uniforms.time.value = clock.elapsedTime;
     update();
   });
 
   const pointsMesh = useRef<THREE.Points>();
+  const imageMesh = useRef<THREE.Mesh>();
   useLayoutEffect(() => {
     const aspect = size.width / size.height;
-    const { naturalWidth, naturalHeight } = imgEl;
     let s = 1;
+    let y = 0;
     if (aspect > imageAspect) {
-
-    } else {
-
+      s = aspect / imageAspect;
+      y = (s - 1) * 0.5;
     }
-    
-    // let s = 1;
-    // if (aspect > imageAspect) {
-    //   s = imageAspect / aspect;
-    // } else {
-    //   s = aspect / imageAspect;
-    // }
-    // g.scale.set(s, s, s);
+
+    pointsMesh.current.position.y = y;
+    pointsMesh.current.scale.set(s, s, s);
+
+    imageMesh.current.scale.set(s * imageAspect, s, s);
+    imageMesh.current.position.y = y;
   }, [size.width, size.height]);
 
   return (
     <group>
-      <points ref={pointsMesh} geometry={geometry}>
+      <points position-z={0} ref={pointsMesh} geometry={geometry}>
         {/* @ts-ignore */}
         <particlesShaderMaterial
-          ref={material}
+          ref={particlesMaterial}
           depthWrite={false}
           depthTest={false}
           transparent
@@ -295,6 +301,17 @@ const Points: React.FC<PointsProps> = (props) => {
           colors={Colors}
         />
       </points>
+      <mesh ref={imageMesh}>
+        <planeBufferGeometry args={[1, 1]} attach="geometry" />
+        {/* @ts-ignore */}
+        <imgShaderMaterial
+          ref={imgMaterial}
+          transparent
+          attach="material"
+          image={imageTexture}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
     </group>
   );
 };
@@ -302,7 +319,7 @@ const Points: React.FC<PointsProps> = (props) => {
 const Scene = () => {
   return (
     <>
-      <Points maskImage={mask2Image} image={""} />
+      <Points maskImage={mask1Image} image={image1} />
     </>
   );
 };
