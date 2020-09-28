@@ -6,7 +6,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
-} from 'react';
+} from "react";
 import {
   Canvas,
   useFrame,
@@ -14,24 +14,25 @@ import {
   extend,
   useThree,
   useUpdate,
-} from 'react-three-fiber';
-import * as THREE from 'three';
-import { OrbitControls, shaderMaterial, useTextureLoader, Html } from 'drei';
-import * as dat from 'dat.gui';
-import { useDeepMemo, useDeepCompareEffect } from './useDeep';
-import myVideo from 'url:./assets/video.mp4';
-import vertex from './shader/vertex.glsl';
-import fragment from './shader/fragment.glsl';
-import vertexParticles from './shader/vertex-particles.glsl';
-import fragmentParticles from './shader/fragment-particles.glsl';
-import { PlaneBufferGeometry } from 'three';
-import tri from 'url:./assets/tri.png';
-import mask1Image from 'url:./assets/mask1.jpg';
-import useSWR from 'swr';
+} from "react-three-fiber";
+import * as THREE from "three";
+import { OrbitControls, shaderMaterial, useTextureLoader, Html } from "drei";
+import * as dat from "dat.gui";
+import { useDeepMemo, useDeepCompareEffect } from "./useDeep";
+import myVideo from "url:./assets/video.mp4";
+import vertex from "./shader/vertex.glsl";
+import fragment from "./shader/fragment.glsl";
+import vertexParticles from "./shader/vertex-particles.glsl";
+import fragmentParticles from "./shader/fragment-particles.glsl";
+import { PlaneBufferGeometry } from "three";
+import tri from "url:./assets/tri.png";
+import mask1Image from "url:./assets/mask1.jpg";
+import mask2Image from "url:./assets/mask2.jpg";
+import useSWR from "swr";
 
 interface DatGuiSetting {
   value: string | number | undefined;
-  type?: 'color' | undefined;
+  type?: "color" | undefined;
   min?: number;
   max?: number;
   step?: number;
@@ -53,8 +54,8 @@ extend({
 });
 
 const useDatGui = <T extends Record<string, DatGuiSetting>>(settings: T) => {
-  const obj = useDeepMemo<Record<keyof T, DatGuiSetting['value']>>(() => {
-    const o = {} as Record<keyof T, DatGuiSetting['value']>;
+  const obj = useDeepMemo<Record<keyof T, DatGuiSetting["value"]>>(() => {
+    const o = {} as Record<keyof T, DatGuiSetting["value"]>;
     Object.keys(settings).forEach((key) => {
       const setting = settings[key];
       const { value } = setting;
@@ -68,7 +69,7 @@ const useDatGui = <T extends Record<string, DatGuiSetting>>(settings: T) => {
     Object.keys(settings).forEach((key) => {
       const setting = settings[key];
       const { type, min, max, step } = setting;
-      if (type === 'color') {
+      if (type === "color") {
         inst.addColor(obj, key);
       } else {
         inst.add(obj, key, min, max, step);
@@ -90,10 +91,10 @@ interface UseImageDataOptions {
 const loadImage = (src: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const i = new Image();
-    i.addEventListener('load', () => {
+    i.addEventListener("load", () => {
       resolve(i);
     });
-    i.addEventListener('error', (e) => {
+    i.addEventListener("error", (e) => {
       reject(e);
     });
     i.src = src;
@@ -101,13 +102,13 @@ const loadImage = (src: string): Promise<HTMLImageElement> => {
 };
 
 const useImageData = (options: UseImageDataOptions) => {
-  const canvas = useMemo(() => document.createElement('canvas'), []);
-  const ctx = useMemo(() => canvas.getContext('2d'), [canvas]);
+  const canvas = useMemo(() => document.createElement("canvas"), []);
+  const ctx = useMemo(() => canvas.getContext("2d"), [canvas]);
   const { image, scale = 1 } = options;
   const { data: img } = useSWR<HTMLImageElement>(
-    ['image', image],
+    ["image", image],
     (__, i) => {
-      if (typeof i === 'string') {
+      if (typeof i === "string") {
         return loadImage(i);
       }
       return i;
@@ -134,8 +135,6 @@ const useImageData = (options: UseImageDataOptions) => {
   };
 };
 
-const size = 100;
-
 const Colors = [
   new THREE.Color(0xffffff),
   new THREE.Color(247 / 255, 203 / 255, 105 / 255),
@@ -152,16 +151,35 @@ const getPixelColor = (imageData: ImageData, x: number, y: number) => {
   return [data[i], data[i + 1], data[i + 2], data[i + 3]];
 };
 
-const Points = () => {
-  const { clock } = useThree();
-  const { data: maskData } = useImageData({
-    image: mask1Image,
-    scale: 100 / 1920,
+interface PointsProps {
+  positionScale?: number;
+  imageScale?: number;
+  speedScale?: number;
+  maskImage: string;
+  image: string;
+}
+
+const Points: React.FC<PointsProps> = (props) => {
+  let {
+    positionScale = 1 / 50,
+    imageScale = 100 / 1920,
+    speedScale = 0.001,
+    maskImage,
+    image,
+  } = props;
+  const { clock, size } = useThree();
+  const { data: maskData, image: imgEl } = useImageData({
+    image: maskImage,
+    scale: imageScale,
   });
+
+  positionScale = 1 / maskData.height;
+
+  const imageAspect = maskData.width / maskData.height;
+
   const triTexture = useTextureLoader(tri);
   const speeds = useRef<number[] | undefined>();
-  const posScale = 1 / 50;
-  const speedScale = 0.001;
+
   const geometry = useMemo(() => {
     const bufferGeo = new THREE.BufferGeometry();
     const vertices: number[] = [];
@@ -174,8 +192,8 @@ const Points = () => {
       for (let j = 0; j < height; j++) {
         const p = data[(j * width + i) * 4];
         if (p === 255) {
-          const x = (i - width * 0.5) * posScale;
-          const y = -(j - height * 0.5) * posScale;
+          const x = (i - width * 0.5) * positionScale;
+          const y = -(j - height * 0.5) * positionScale;
           const z = Math.random() * 0.5 + 0.5;
           vertices.push(x, y, z);
           alphas.push(Math.random() * 0.8 + 0.1);
@@ -186,18 +204,18 @@ const Points = () => {
       }
     }
     bufferGeo.setAttribute(
-      'position',
+      "position",
       new THREE.Float32BufferAttribute(vertices, 3)
     );
     bufferGeo.setAttribute(
-      'alpha',
+      "alpha",
       new THREE.Float32BufferAttribute(alphas, 1)
     );
     bufferGeo.setAttribute(
-      'colorIdx',
+      "colorIdx",
       new THREE.Int8BufferAttribute(colors, 1)
     );
-    bufferGeo.setAttribute('rot', new THREE.Float32BufferAttribute(rot, 1));
+    bufferGeo.setAttribute("rot", new THREE.Float32BufferAttribute(rot, 1));
     return bufferGeo;
   }, []);
 
@@ -215,13 +233,17 @@ const Points = () => {
       let r = rotArr[i / 3];
       const speed = speeds.current[i / 3];
 
-      let ix = x / posScale + 0.5 * width;
-      let iy = -y / posScale + 0.5 * height;
-      
-      if (ix <= 0 || ix >= width || iy <= 0 || iy >= height) {
-        r += Math.PI * (1 + Math.random() * 0.05);
-      } else if (getPixelColor(maskData, ~~ix, ~~iy)[0] === 0) {
-        r += Math.PI * (1 + Math.random() * 0.05);
+      let ix = x / positionScale + 0.5 * width;
+      let iy = -y / positionScale + 0.5 * height;
+
+      if (
+        ix <= 0 ||
+        ix >= width ||
+        iy <= 0 ||
+        iy >= height ||
+        getPixelColor(maskData, ~~ix, ~~iy)[0] === 0
+      ) {
+        r += Math.PI;
       }
 
       x += speed * Math.cos(r);
@@ -239,68 +261,98 @@ const Points = () => {
     update();
   });
 
+  const pointsMesh = useRef<THREE.Points>();
+  useLayoutEffect(() => {
+    const aspect = size.width / size.height;
+    const { naturalWidth, naturalHeight } = imgEl;
+    let s = 1;
+    if (aspect > imageAspect) {
+
+    } else {
+
+    }
+    
+    // let s = 1;
+    // if (aspect > imageAspect) {
+    //   s = imageAspect / aspect;
+    // } else {
+    //   s = aspect / imageAspect;
+    // }
+    // g.scale.set(s, s, s);
+  }, [size.width, size.height]);
+
   return (
-    <points geometry={geometry}>
-      {/* @ts-ignore */}
-      <particlesShaderMaterial
-        ref={material}
-        depthWrite={false}
-        depthTest={false}
-        transparent
-        attach="material"
-        tex={triTexture}
-        colors={Colors}
-      />
-    </points>
+    <group>
+      <points ref={pointsMesh} geometry={geometry}>
+        {/* @ts-ignore */}
+        <particlesShaderMaterial
+          ref={material}
+          depthWrite={false}
+          depthTest={false}
+          transparent
+          attach="material"
+          tex={triTexture}
+          colors={Colors}
+        />
+      </points>
+    </group>
   );
 };
 
 const Scene = () => {
   return (
     <>
-      <Points />
+      <Points maskImage={mask2Image} image={""} />
     </>
   );
 };
 
 const CameraSet = () => {
-  const { aspect, camera } = useThree();
+  const { size, setDefaultCamera, camera: dCamera } = useThree();
+  const frustumSize = 1;
+  const camera = useMemo(() => {
+    const c = new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1000);
+    c.position.set(0, 0, 2);
+    c.lookAt(0, 0, 0);
+    setDefaultCamera(c);
+    return c;
+  }, []);
   useLayoutEffect(() => {
-    const dist = camera.position.z;
-    const height = 0.8; // make the scene "bigger", so the rotation of scene will not show the blank space
-    (camera as THREE.PerspectiveCamera).fov =
-      2 * (180 / Math.PI) * Math.atan(height / 2 / dist);
+    const aspect = size.width / size.height;
+    camera.left = -frustumSize * 0.5 * aspect;
+    camera.right = frustumSize * 0.5 * aspect;
+    camera.top = frustumSize * 0.5;
+    camera.bottom = -frustumSize * 0.5;
     camera.updateProjectionMatrix();
-  }, [aspect]);
+  }, [camera, size.width, size.height]);
 
   return null;
 };
 
 const App = () => {
   return (
-    <Canvas
-      colorManagement
-      camera={{
-        position: [0, 0, 2],
-        fov: 70,
-      }}
-      onCreated={(ctx) => {
-        ctx.gl.setClearColor(0x000000);
-      }}
-    >
-      <ambientLight intensity={0.5} />
-      {/* <CameraSet /> */}
-      <OrbitControls />
-      <Suspense
-        fallback={
-          <Html>
-            <div>Loading</div>
-          </Html>
-        }
+    <div id="canvas">
+      <Canvas
+        colorManagement
+        updateDefaultCamera={false} // not update our custom camera
+        onCreated={(ctx) => {
+          ctx.gl.setClearColor(0x000000);
+        }}
       >
-        <Scene />
-      </Suspense>
-    </Canvas>
+        <CameraSet />
+        <ambientLight intensity={0.5} />
+        <OrbitControls />
+        <Suspense
+          fallback={
+            <Html>
+              <div>Loading</div>
+            </Html>
+          }
+        >
+          <Scene />
+        </Suspense>
+      </Canvas>
+    </div>
   );
 };
 
