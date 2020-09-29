@@ -12,5 +12,8 @@ vec4 overlayBlending(vec4 x, vec4 y, float opacity) {
 }
 
 void main() {
-  gl_FragColor = texture2D(image, vUv);
+  vec4 fgColor = texture2D(fg, vUv);
+  vec4 imageColor = texture2D(image, vUv);
+  vec4 color = overlayBlending(imageColor, fgColor, 1.);
+  gl_FragColor = fgColor;
 }

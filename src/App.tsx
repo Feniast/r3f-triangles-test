@@ -46,7 +46,7 @@ interface DatGuiSetting {
 const ImgShaderMaterial = shaderMaterial(
   {
     image: null,
-    fg: null
+    fg: null,
   },
   vertex,
   fragment,
@@ -196,7 +196,7 @@ const Points: React.FC<PointsProps> = (props) => {
     sampleStep = { x: 1, y: 1 },
   } = props;
   const { clock, size, camera } = useThree();
-  const { data: maskData } = useImageData({
+  const { data: maskData, image: imgEl } = useImageData({
     image: maskImage,
     scale: imageScale,
   });
@@ -229,7 +229,7 @@ const Points: React.FC<PointsProps> = (props) => {
         if (p === 255) {
           const x = (i - width * 0.5) * positionScale;
           const y = -(j - height * 0.5) * positionScale;
-          const z = Math.random() * 0.5 + 0.5;
+          const z = Math.random() * 0.5 + 0.7;
           vertices.push(x, y, z);
           alphas.push(Math.random() * 0.6 + 0.4);
           colors.push(random(0, Colors.length, true));
@@ -305,18 +305,18 @@ const Points: React.FC<PointsProps> = (props) => {
       y = (s - 1) * 0.5;
     }
 
-    pointsMesh.current.position.y = y;
-    pointsMesh.current.scale.set(s, s, s);
+    // pointsMesh.current.position.y = y;
+    // pointsMesh.current.scale.set(s, s, s);
 
     // imageMesh.current.scale.set(s, s, s);
     // imageMesh.current.position.y = y;
-    // imageMesh2.current.scale.set(s, s, s);
-    // imageMesh2.current.position.y = y;
+    imageMesh2.current.scale.set(s, s, s);
+    imageMesh2.current.position.y = y;
   }, [size.width, size.height]);
 
   const renderTarget = useMemo(
     () =>
-      new THREE.WebGLRenderTarget(size.width, size.height, {
+      new THREE.WebGLRenderTarget(imgEl.naturalWidth, imgEl.naturalHeight, {
         encoding: THREE.sRGBEncoding,
         generateMipmaps: true,
         minFilter: THREE.LinearMipmapLinearFilter,
@@ -364,9 +364,9 @@ const Points: React.FC<PointsProps> = (props) => {
 
   useFrame(({ gl, scene, camera }) => {
     particlesMaterial.current.uniforms.time.value = clock.elapsedTime;
-    update();
-    renderTarget.width = size.width;
-    renderTarget.height = size.height;
+    // update();
+    // renderTarget.width = size.width;
+    // renderTarget.height = size.height;
     gl.setRenderTarget(renderTarget);
     gl.render(offScene, offCamera);
     gl.setRenderTarget(null);
@@ -398,7 +398,7 @@ const Points: React.FC<PointsProps> = (props) => {
           />
         </mesh> */}
         <mesh position-z={0.001} ref={imageMesh2} visible={true}>
-          <planeBufferGeometry args={[aspect, 1]} attach="geometry" />
+          <planeBufferGeometry args={[imageAspect, 1]} attach="geometry" />
           <imgShaderMaterial
             transparent
             attach="material"
@@ -418,7 +418,7 @@ const Scene = () => {
       <Points
         maskImage={mask3Image}
         image={image3}
-        sampleStep={{ x: 1.5, y: 2 }}
+        sampleStep={{ x: 1, y: 1 }}
       />
     </>
   );
