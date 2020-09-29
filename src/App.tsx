@@ -30,9 +30,11 @@ import tri from "url:./assets/tri.png";
 import mask1Image from "url:./assets/mask1.jpg";
 import mask2Image from "url:./assets/mask2.jpg";
 import mask3Image from "url:./assets/mask3.jpg";
+import mask4Image from "url:./assets/mask4.jpg";
 import image1 from "url:./assets/image1.jpg";
 import image2 from "url:./assets/image2.jpg";
 import image3 from "url:./assets/image3.jpg";
+import image4 from "url:./assets/image4.jpg";
 import useSWR from "swr";
 
 interface DatGuiSetting {
@@ -49,8 +51,23 @@ const ImgShaderMaterial = shaderMaterial(
     fg: null,
   },
   vertex,
-  fragment,
-  () => null
+  fragment
+);
+
+const BgShaderMaterial = shaderMaterial(
+  {
+    image: null,
+  },
+  vertex,
+  `
+varying vec2 vUv;
+uniform sampler2D image;
+uniform sampler2D fg;
+
+void main() {
+  gl_FragColor = texture2D(image, vUv);
+}
+`
 );
 
 const ParticlesShaderMaterial = shaderMaterial(
@@ -58,15 +75,16 @@ const ParticlesShaderMaterial = shaderMaterial(
     time: 0,
     tex: null,
     colors: null,
+    pointSize: 1,
   },
   vertexParticles,
-  fragmentParticles,
-  () => null
+  fragmentParticles
 );
 
 extend({
   ParticlesShaderMaterial,
   ImgShaderMaterial,
+  BgShaderMaterial,
 });
 
 declare global {
@@ -74,6 +92,7 @@ declare global {
     interface IntrinsicElements {
       particlesShaderMaterial: any;
       imgShaderMaterial: any;
+      bgShaderMaterial: any;
     }
   }
 }
@@ -162,12 +181,28 @@ const useImageData = (options: UseImageDataOptions) => {
 
 const Colors = [
   new THREE.Color(0xffffff),
-  new THREE.Color(247 / 255, 203 / 255, 105 / 255),
+  new THREE.Color(255 / 255, 222 / 255, 41 / 255),
 ];
 
 const random = (min: number, max: number, isInt = false) => {
   const r = Math.random() * (max - min) + min;
   return isInt ? Math.floor(r) : r;
+};
+
+const clamp = (v: number, min: number, max: number) => {
+  return Math.min(max, Math.max(min, v));
+};
+
+const map = (
+  v: number,
+  s: number,
+  t: number,
+  a: number,
+  b: number,
+  clamped = true
+) => {
+  const r = a + ((v - s) / (t - s)) * (b - a);
+  return clamped ? clamp(r, a, b) : r;
 };
 
 const getPixelColor = (imageData: ImageData, x: number, y: number) => {
@@ -177,8 +212,10 @@ const getPixelColor = (imageData: ImageData, x: number, y: number) => {
 };
 
 interface PointsProps {
-  imageScale?: number;
+  maskScale?: number;
   speedScale?: number;
+  pointScale?: number;
+  pointsCanvasScale?: number;
   maskImage: string;
   image: string;
   sampleStep?: {
@@ -189,23 +226,25 @@ interface PointsProps {
 
 const Points: React.FC<PointsProps> = (props) => {
   let {
-    imageScale = 100 / 1920,
+    maskScale = 150 / 1920,
     speedScale = 0.0006,
+    pointsCanvasScale = 1,
+    pointScale = 1,
     maskImage,
     image,
     sampleStep = { x: 1, y: 1 },
   } = props;
-  const { clock, size, camera } = useThree();
+  const { clock, size } = useThree();
   const { data: maskData, image: imgEl } = useImageData({
     image: maskImage,
-    scale: imageScale,
+    scale: maskScale,
   });
 
   let { x: xStep = 1, y: yStep = 1 } = sampleStep;
   xStep = Math.max(xStep, 1);
   yStep = Math.max(yStep, 1);
 
-  const imageTexture = useTextureLoader(image);
+  const imageTexture = useTextureLoader(image) as THREE.Texture;
 
   const positionScale = 1 / maskData.height;
 
@@ -252,11 +291,10 @@ const Points: React.FC<PointsProps> = (props) => {
     );
     bufferGeo.setAttribute("rot", new THREE.Float32BufferAttribute(rot, 1));
     return bufferGeo;
-  }, []);
+  }, [maskData]);
 
   const particlesMaterial = useRef<THREE.ShaderMaterial>();
   const imgMaterial = useRef<THREE.ShaderMaterial>();
-  const imgMaterial2 = useRef<THREE.ShaderMaterial>();
 
   const update = () => {
     const position = geometry.attributes.position;
@@ -295,7 +333,6 @@ const Points: React.FC<PointsProps> = (props) => {
 
   const pointsMesh = useRef<THREE.Points>();
   const imageMesh = useRef<THREE.Mesh>();
-  const imageMesh2 = useRef<THREE.Mesh>();
   useLayoutEffect(() => {
     const aspect = size.width / size.height;
     let s = 1;
@@ -308,20 +345,22 @@ const Points: React.FC<PointsProps> = (props) => {
     // pointsMesh.current.position.y = y;
     // pointsMesh.current.scale.set(s, s, s);
 
-    // imageMesh.current.scale.set(s, s, s);
-    // imageMesh.current.position.y = y;
-    imageMesh2.current.scale.set(s, s, s);
-    imageMesh2.current.position.y = y;
-  }, [size.width, size.height]);
+    imageMesh.current.scale.set(s, s, s);
+    imageMesh.current.position.y = y;
+  }, [size.width, size.height, imageAspect]);
 
   const renderTarget = useMemo(
     () =>
-      new THREE.WebGLRenderTarget(imgEl.naturalWidth, imgEl.naturalHeight, {
-        encoding: THREE.sRGBEncoding,
-        generateMipmaps: true,
-        minFilter: THREE.LinearMipmapLinearFilter,
-      }),
-    []
+      new THREE.WebGLRenderTarget(
+        imgEl.naturalWidth * pointsCanvasScale,
+        imgEl.naturalHeight * pointsCanvasScale,
+        {
+          encoding: THREE.sRGBEncoding,
+          generateMipmaps: true,
+          minFilter: THREE.LinearMipmapLinearFilter,
+        }
+      ),
+    [imgEl, pointsCanvasScale]
   );
   const offScene = useMemo(() => new THREE.Scene(), []);
   const offCamera = useMemo(() => {
@@ -331,19 +370,19 @@ const Points: React.FC<PointsProps> = (props) => {
     return c;
   }, []);
   useLayoutEffect(() => {
-    const aspect = size.width / size.height;
+    const aspect = imageAspect;
     offCamera.left = -1 * 0.5 * aspect;
     offCamera.right = 1 * 0.5 * aspect;
     offCamera.top = 1 * 0.5;
     offCamera.bottom = -1 * 0.5;
     offCamera.updateProjectionMatrix();
-  }, [offCamera, size.width, size.height]);
+  }, [offCamera, imageAspect]);
 
   const offSceneContent = createPortal(
     <>
       {/* <primitive object={offCamera} /> */}
       <points
-        position-z={0.002}
+        position-z={0.001}
         ref={pointsMesh}
         geometry={geometry}
         visible={true}
@@ -356,55 +395,40 @@ const Points: React.FC<PointsProps> = (props) => {
           attach="material"
           tex={triTexture}
           colors={Colors}
+          pointSize={map(size.width, 400, 1200, 0.5, 1) * pointScale}
         />
       </points>
+      <mesh>
+        <planeBufferGeometry attach="geometry" args={[imageAspect, 1]} />
+        <bgShaderMaterial transparent attach="material" image={imageTexture} />
+      </mesh>
     </>,
     offScene
   );
 
-  useFrame(({ gl, scene, camera }) => {
+  useFrame(({ gl }) => {
     particlesMaterial.current.uniforms.time.value = clock.elapsedTime;
-    // update();
+    update();
     // renderTarget.width = size.width;
     // renderTarget.height = size.height;
     gl.setRenderTarget(renderTarget);
     gl.render(offScene, offCamera);
     gl.setRenderTarget(null);
-    imgMaterial2.current.needsUpdate = true;
+    imgMaterial.current.needsUpdate = true;
   });
 
   return (
     <>
       {offSceneContent}
       <group>
-        {/* <points position-z={0} ref={pointsMesh} geometry={geometry}>
-          <particlesShaderMaterial
-            ref={particlesMaterial}
-            depthWrite={false}
-            depthTest={false}
-            transparent
-            attach="material"
-            tex={triTexture}
-            colors={Colors}
-          />
-        </points> */}
-        {/* <mesh ref={imageMesh} visible={true}>
-          <planeBufferGeometry args={[imageAspect, 1]} attach="geometry" />
-          <imgShaderMaterial
-            ref={imgMaterial}
-            transparent
-            attach="material"
-            image={imageTexture}
-          />
-        </mesh> */}
-        <mesh position-z={0.001} ref={imageMesh2} visible={true}>
+        <mesh position-z={0.001} ref={imageMesh} visible={true}>
           <planeBufferGeometry args={[imageAspect, 1]} attach="geometry" />
           <imgShaderMaterial
             transparent
             attach="material"
             image={imageTexture}
             fg={renderTarget.texture}
-            ref={imgMaterial2}
+            ref={imgMaterial}
           />
         </mesh>
       </group>
@@ -412,14 +436,52 @@ const Points: React.FC<PointsProps> = (props) => {
   );
 };
 
+const configs: PointsProps[] = [
+  {
+    image: image1,
+    maskImage: mask1Image,
+    sampleStep: {
+      x: 1,
+      y: 1,
+    },
+    pointScale: 1.2,
+    maskScale: 100 / 1920,
+  },
+  {
+    image: image2,
+    maskImage: mask2Image,
+    sampleStep: {
+      x: 1,
+      y: 1,
+    },
+    pointScale: 1.2,
+    maskScale: 100 / 1920,
+  },
+  {
+    image: image3,
+    maskImage: mask3Image,
+    sampleStep: {
+      x: 1,
+      y: 1,
+    },
+    pointScale: 1.2,
+    maskScale: 100 / 1920,
+  },
+  {
+    image: image4,
+    maskImage: mask4Image,
+    sampleStep: {
+      x: 1,
+      y: 1,
+    },
+    maskScale: 120 / 1200,
+  },
+];
+
 const Scene = () => {
   return (
     <>
-      <Points
-        maskImage={mask3Image}
-        image={image3}
-        sampleStep={{ x: 1, y: 1 }}
-      />
+      <Points {...configs[2]} />
     </>
   );
 };
@@ -453,7 +515,7 @@ const App = () => {
         colorManagement
         updateDefaultCamera={false} // not update our custom camera
         onCreated={(ctx) => {
-          // ctx.gl.setClearColor(0x000000);
+          ctx.gl.setClearColor(0x000000);
         }}
       >
         <CameraSet />

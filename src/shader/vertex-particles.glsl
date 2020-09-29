@@ -1,5 +1,6 @@
 uniform float time;
 uniform vec3 colors[2];
+uniform float pointSize;
 attribute float alpha;
 attribute float colorIdx;
 attribute float rot;
@@ -83,7 +84,18 @@ void main() {
   vAlpha = alpha;
   vColor = colors[int(colorIdx)];
   vRot = rot;
-  vec4 mvPos = modelViewMatrix * vec4(position, 1.);
-  gl_PointSize = 20. *  (1. / - mvPos.z);
+
+  vec3 newPos = position;
+  float dist = distance(position, vec3(15.0, -7.0, 0.0));
+  float f = sin(dist + time * 0.23) * 9. + 0.;
+  float dx = cos(f) * 0.01;
+  float dy = sin(f) * 0.025;
+  newPos.x += dx;
+  newPos.y += dy;
+
+  vec4 mvPos = modelViewMatrix * vec4(newPos, 1.);
+  float pSize = 20. * pointSize *  (1. / - mvPos.z);
+  // gl_PointSize = clamp((sin(f) + 1.), 0.5, 1.25) * pSize;
+  gl_PointSize = sin(f + sin(f * f + 2. * f)) * 3. + 2. + pSize;
   gl_Position = projectionMatrix * mvPos;
 }

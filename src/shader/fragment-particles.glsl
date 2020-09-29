@@ -13,7 +13,6 @@ vec2 rotate(vec2 p, float angle) {
 
 void main() {
   vec2 coord = rotate(gl_PointCoord - vec2(0.5), vRot) + vec2(0.5); 
-  gl_FragColor = vec4(1.0, 1.0, 1.0, 0.6);
   vec4 texColor = texture2D(tex, coord);
-  gl_FragColor = vec4(vColor, texColor.a * vAlpha);
+  gl_FragColor = vec4(vColor, texColor.a * vAlpha * 0.7);
 }
