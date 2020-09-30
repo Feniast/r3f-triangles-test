@@ -89,16 +89,16 @@ void main() {
 
   vec3 newPos = mix(sPosition, position, progress);
   float dist = distance(position, vec3(15.0, -7.0, 0.0));
-  float f = sin(dist + time * 0.23) * 9. + 0.;
+  float f = sin(dist + time * 0.3) * 9. + 0.;
   float dx = cos(f) * 0.01;
-  float dy = sin(f) * 0.025;
+  float dy = sin(f) * 0.04;
   newPos.x += dx;
   newPos.y += dy;
 
   vec4 mvPos = modelViewMatrix * vec4(newPos, 1.);
-  float pSize = 20. * pointSize *  (1. / - mvPos.z);
+  float pSize = 16. * pointSize *  (1. / - mvPos.z);
   // gl_PointSize = clamp((sin(f) + 1.), 0.5, 1.25) * pSize;
-  gl_PointSize = (sin(f * cos(1.5 * f)) + cos(f + 0.1 * pow(f, 2.)) + exp(sin(0.1 * f)) - 1.) * 3. + pSize; // no meaning, only for playing
+  gl_PointSize = (sin(f * cos(1.5 * f)) + cos(f + 0.1 * pow(f, 2.)) + exp(sin(0.1 * f)) - 1.) * 10. + 3. + pSize; // no meaning, only for playing
   // gl_PointSize = sin(f + sin(f * f + 2. * f)) * 3. + 2. + pSize;
   gl_Position = projectionMatrix * mvPos;
 }
