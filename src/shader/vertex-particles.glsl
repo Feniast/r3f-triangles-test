@@ -1,9 +1,11 @@
 uniform float time;
 uniform vec3 colors[2];
 uniform float pointSize;
+uniform float progress;
 attribute float alpha;
 attribute float colorIdx;
 attribute float rot;
+attribute vec3 sPosition;
 varying float vAlpha;
 varying vec3 vColor;
 varying float vRot;
@@ -81,11 +83,11 @@ float cnoise(vec3 P){
 }
 
 void main() {
-  vAlpha = alpha;
+  vAlpha = alpha * progress;
   vColor = colors[int(colorIdx)];
   vRot = rot;
 
-  vec3 newPos = position;
+  vec3 newPos = mix(sPosition, position, progress);
   float dist = distance(position, vec3(15.0, -7.0, 0.0));
   float f = sin(dist + time * 0.23) * 9. + 0.;
   float dx = cos(f) * 0.01;
@@ -96,6 +98,7 @@ void main() {
   vec4 mvPos = modelViewMatrix * vec4(newPos, 1.);
   float pSize = 20. * pointSize *  (1. / - mvPos.z);
   // gl_PointSize = clamp((sin(f) + 1.), 0.5, 1.25) * pSize;
-  gl_PointSize = sin(f + sin(f * f + 2. * f)) * 3. + 2. + pSize;
+  gl_PointSize = (sin(f * cos(1.5 * f)) + cos(f + 0.1 * pow(f, 2.)) + exp(sin(0.1 * f)) - 1.) * 3. + pSize; // no meaning, only for playing
+  // gl_PointSize = sin(f + sin(f * f + 2. * f)) * 3. + 2. + pSize;
   gl_Position = projectionMatrix * mvPos;
 }

@@ -49,6 +49,7 @@ const ImgShaderMaterial = shaderMaterial(
   {
     image: null,
     fg: null,
+    progress: 0
   },
   vertex,
   fragment
@@ -76,6 +77,7 @@ const ParticlesShaderMaterial = shaderMaterial(
     tex: null,
     colors: null,
     pointSize: 1,
+    progress: 0
   },
   vertexParticles,
   fragmentParticles
@@ -181,7 +183,7 @@ const useImageData = (options: UseImageDataOptions) => {
 
 const Colors = [
   new THREE.Color(0xffffff),
-  new THREE.Color(255 / 255, 222 / 255, 41 / 255),
+  new THREE.Color(255 / 255, 222 / 255, 101 / 255),
 ];
 
 const random = (min: number, max: number, isInt = false) => {
@@ -227,7 +229,7 @@ interface PointsProps {
 const Points: React.FC<PointsProps> = (props) => {
   let {
     maskScale = 150 / 1920,
-    speedScale = 0.0006,
+    speedScale = 0.0003,
     pointsCanvasScale = 1,
     pointScale = 1,
     maskImage,
@@ -254,9 +256,21 @@ const Points: React.FC<PointsProps> = (props) => {
   const triTexture = useTextureLoader(tri);
   const speeds = useRef<number[] | undefined>();
 
+  const settings = useDatGui({
+    progress: {
+      value: 1,
+      min: 0,
+      max: 1,
+      step: 0.01
+    }
+  });
+
+  console.log(settings);
+
   const geometry = useMemo(() => {
     const bufferGeo = new THREE.BufferGeometry();
     const vertices: number[] = [];
+    const starts: number[] = [];
     const alphas: number[] = [];
     const colors: number[] = [];
     const rot: number[] = [];
@@ -268,8 +282,13 @@ const Points: React.FC<PointsProps> = (props) => {
         if (p === 255) {
           const x = (i - width * 0.5) * positionScale;
           const y = -(j - height * 0.5) * positionScale;
-          const z = Math.random() * 0.5 + 0.7;
+          const z = Math.random() * 0.6 + 0.4;
           vertices.push(x, y, z);
+          starts.push(
+            random(-1 * aspect, aspect),
+            random(-1, 1),
+            Math.random() * 0.6 + 0.7
+          );
           alphas.push(Math.random() * 0.6 + 0.4);
           colors.push(random(0, Colors.length, true));
           rot.push(Math.random() * Math.PI * 2);
@@ -280,6 +299,10 @@ const Points: React.FC<PointsProps> = (props) => {
     bufferGeo.setAttribute(
       "position",
       new THREE.Float32BufferAttribute(vertices, 3)
+    );
+    bufferGeo.setAttribute(
+      "sPosition",
+      new THREE.Float32BufferAttribute(starts, 3)
     );
     bufferGeo.setAttribute(
       "alpha",
@@ -342,9 +365,6 @@ const Points: React.FC<PointsProps> = (props) => {
       y = (s - 1) * 0.5;
     }
 
-    // pointsMesh.current.position.y = y;
-    // pointsMesh.current.scale.set(s, s, s);
-
     imageMesh.current.scale.set(s, s, s);
     imageMesh.current.position.y = y;
   }, [size.width, size.height, imageAspect]);
@@ -398,19 +418,21 @@ const Points: React.FC<PointsProps> = (props) => {
           pointSize={map(size.width, 400, 1200, 0.5, 1) * pointScale}
         />
       </points>
-      <mesh>
+      {/* <mesh>
         <planeBufferGeometry attach="geometry" args={[imageAspect, 1]} />
         <bgShaderMaterial transparent attach="material" image={imageTexture} />
-      </mesh>
+      </mesh> */}
     </>,
     offScene
   );
 
   useFrame(({ gl }) => {
+    particlesMaterial.current.uniforms.progress.value = settings.progress;
     particlesMaterial.current.uniforms.time.value = clock.elapsedTime;
-    update();
-    // renderTarget.width = size.width;
-    // renderTarget.height = size.height;
+    imgMaterial.current.uniforms.progress.value = settings.progress;
+    if (settings.progress > 0) {
+      update();
+    }
     gl.setRenderTarget(renderTarget);
     gl.render(offScene, offCamera);
     gl.setRenderTarget(null);
@@ -474,7 +496,8 @@ const configs: PointsProps[] = [
       x: 1,
       y: 1,
     },
-    maskScale: 120 / 1200,
+    maskScale: 100 / 1200,
+    pointScale: 1.,
   },
 ];
 
@@ -515,7 +538,7 @@ const App = () => {
         colorManagement
         updateDefaultCamera={false} // not update our custom camera
         onCreated={(ctx) => {
-          ctx.gl.setClearColor(0x000000);
+          // ctx.gl.setClearColor(0x000000);
         }}
       >
         <CameraSet />
